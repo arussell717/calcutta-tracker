@@ -10,19 +10,22 @@ interface TournamentData {
   gameResults: Array<{ winner: string; loser: string; winnerScore: string; loserScore: string }>;
 }
 
-// Fuzzy match a team name against our data
+// Strict match a team name against our data (no fuzzy includes!)
 function matchTeam(espnName: string): string | null {
   const normalized = normalizeTeamName(espnName);
+  
+  // Exact match
   const direct = TEAMS.find(t => t.team === normalized);
   if (direct) return direct.team;
 
-  // Try lowercase includes
-  for (const t of TEAMS) {
-    if (t.team.toLowerCase() === normalized.toLowerCase()) return t.team;
-    if (t.team.toLowerCase().includes(normalized.toLowerCase()) || normalized.toLowerCase().includes(t.team.toLowerCase())) {
-      return t.team;
-    }
-  }
+  // Case-insensitive exact match
+  const ciExact = TEAMS.find(t => t.team.toLowerCase() === normalized.toLowerCase());
+  if (ciExact) return ciExact.team;
+
+  // Case-insensitive exact match on original ESPN name
+  const ciOrig = TEAMS.find(t => t.team.toLowerCase() === espnName.toLowerCase());
+  if (ciOrig) return ciOrig.team;
+
   return null;
 }
 

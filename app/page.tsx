@@ -2,15 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { TEAMS, PLAYER_COLORS, PAYOUTS } from '@/lib/data';
+import { normalizeTeamName } from '@/lib/espn';
 import type { GameScore } from '@/lib/espn';
 
 function getOwnerForTeam(teamName: string): string | undefined {
-  const entry = TEAMS.find(t => {
-    const tLower = t.team.toLowerCase();
-    const nLower = teamName.toLowerCase();
-    return tLower === nLower || nLower.includes(tLower) || tLower.includes(nLower);
-  });
-  return entry?.owner;
+  const normalized = normalizeTeamName(teamName);
+  
+  // Exact match on normalized name
+  const exact = TEAMS.find(t => t.team === normalized);
+  if (exact) return exact.owner;
+
+  // Case-insensitive exact match
+  const ciExact = TEAMS.find(t => t.team.toLowerCase() === normalized.toLowerCase());
+  if (ciExact) return ciExact.owner;
+
+  // Case-insensitive exact match on original ESPN name
+  const ciOrig = TEAMS.find(t => t.team.toLowerCase() === teamName.toLowerCase());
+  if (ciOrig) return ciOrig.owner;
+
+  return undefined;
 }
 
 function OwnerBadge({ owner }: { owner: string | undefined }) {
@@ -111,10 +121,9 @@ export default function HomePage() {
   const recentGames = games.filter(g => g.status === 'post');
   const upcomingGames = games.filter(g => g.status === 'pre');
 
-  // Check which games involve our teams
-  const ourTeamNames = TEAMS.map(t => t.team.toLowerCase());
+  // Check which games involve our teams (strict matching via getOwnerForTeam)
   const relevantGames = games.filter(g =>
-    ourTeamNames.some(t => g.homeTeam.toLowerCase().includes(t) || g.awayTeam.toLowerCase().includes(t) || t.includes(g.homeTeam.toLowerCase()) || t.includes(g.awayTeam.toLowerCase()))
+    getOwnerForTeam(g.homeTeam) !== undefined || getOwnerForTeam(g.awayTeam) !== undefined
   );
 
   return (
