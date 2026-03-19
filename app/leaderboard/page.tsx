@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { TEAMS, PLAYERS, PLAYER_COLORS, PAYOUTS, BUY_IN } from '@/lib/data';
+import { useTournamentData } from '@/lib/useTournament';
 
 interface TeamWithStatus {
   team: string;
@@ -19,58 +19,12 @@ interface PlayerStats {
   teamsAlive: number;
   teamsEliminated: number;
   totalPayout: number;
-  profit: number;
   aliveTeams: TeamWithStatus[];
   deadTeams: TeamWithStatus[];
 }
 
 export default function LeaderboardPage() {
-  const [eliminatedTeams, setEliminatedTeams] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    async function fetchScores() {
-      try {
-        const res = await fetch('/api/scores');
-        const data = await res.json();
-        if (data.events) {
-          const eliminated = new Set<string>();
-          for (const event of data.events) {
-            const competitions = event.competitions || [];
-            for (const comp of competitions) {
-              const statusType = comp.status?.type?.name;
-              if (statusType === 'STATUS_FINAL') {
-                const competitors = comp.competitors || [];
-                for (const c of competitors) {
-                  if (c.winner === false) {
-                    const teamName = c.team?.displayName || c.team?.shortDisplayName || '';
-                    if (teamName) eliminated.add(teamName);
-                  }
-                }
-              }
-            }
-          }
-          setEliminatedTeams(eliminated);
-        }
-      } catch (e) {
-        // silently fail
-      }
-    }
-    fetchScores();
-    const interval = setInterval(fetchScores, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  function isEliminated(teamName: string): boolean {
-    if (eliminatedTeams.has(teamName)) return true;
-    // fuzzy match
-    for (const elim of Array.from(eliminatedTeams)) {
-      if (elim.toLowerCase().includes(teamName.toLowerCase()) ||
-          teamName.toLowerCase().includes(elim.toLowerCase())) {
-        return true;
-      }
-    }
-    return false;
-  }
+  const { isEliminated, loading } = useTournamentData();
 
   const stats: PlayerStats[] = PLAYERS.map(player => {
     const playerTeams = TEAMS.filter(t => t.owner === player);
@@ -95,7 +49,6 @@ export default function LeaderboardPage() {
       teamsAlive: aliveTeams.length,
       teamsEliminated: deadTeams.length,
       totalPayout: 0,
-      profit: -BUY_IN,
       aliveTeams,
       deadTeams,
     };
@@ -106,6 +59,7 @@ export default function LeaderboardPage() {
       <div className="text-center">
         <h1 className="text-2xl font-bold">🏆 Leaderboard</h1>
         <p className="text-gray-400 mt-1">$1,000 Pot &bull; $100 Buy-in</p>
+        {loading && <p className="text-xs text-gray-600 mt-1">Loading live data...</p>}
       </div>
 
       {/* Payout Reference */}
@@ -154,9 +108,6 @@ export default function LeaderboardPage() {
                       </>
                     )}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    ${player.totalPayout} earned
-                  </div>
                 </div>
               </div>
 
@@ -176,11 +127,12 @@ export default function LeaderboardPage() {
 
               {/* Dead Teams */}
               {player.deadTeams.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
+                <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-gray-800">
+                  <span className="text-[10px] text-gray-600 w-full">Eliminated:</span>
                   {player.deadTeams.map(t => (
                     <span
                       key={t.team}
-                      className="text-xs px-2 py-1 rounded-full border border-gray-700/50 bg-gray-800/30 text-gray-600 line-through"
+                      className="text-xs px-2 py-1 rounded-full border border-red-900/30 bg-red-900/10 text-gray-600 line-through"
                     >
                       💀 ({t.seed}) {t.team} {t.isDog ? '🐕' : ''} <span className="text-gray-700">${t.bid}</span>
                     </span>
