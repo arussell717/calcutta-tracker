@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 
 const links = [
   { href: '/', label: '🏀 Scores' },
-  { href: '/leaderboard', label: '🏆 Leaderboard' },
+  { href: '/bracket', label: '📊 Bracket' },
+  { href: '/leaderboard', label: '🏆 Board' },
   { href: '/teams', label: '📋 Teams' },
 ];
 
