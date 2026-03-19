@@ -1,73 +1,149 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { BRACKET, TEAMS, PLAYER_COLORS, getOwner } from '@/lib/data';
 
-interface GameResult {
-  team1: string;
-  team1Score: number;
-  team2: string;
-  team2Score: number;
-  status: string; // 'pre', 'in', 'post'
-  winner?: string;
-  statusDetail?: string;
-}
-
-function getOwnerBadge(teamName: string) {
-  const owner = getOwner(teamName);
-  if (!owner) return null;
-  const colors = PLAYER_COLORS[owner];
-  const entry = TEAMS.find(t => t.team === teamName);
-  return (
-    <span className={`ml-1 text-[10px] px-1.5 py-0.5 rounded ${colors?.badge || 'bg-gray-600'} text-white font-medium`}>
-      {owner} {entry ? `$${entry.bid}` : ''}
-    </span>
-  );
-}
-
-function TeamLine({ seed, team, isWinner, isLoser }: { seed: number; team: string; isWinner: boolean; isLoser: boolean }) {
+function TeamSlot({ seed, team, isTop }: { seed: number | null; team: string | null; isTop?: boolean }) {
+  if (!team) {
+    return (
+      <div className={`flex items-center gap-1 px-2 py-1 bg-gray-800/50 ${isTop ? 'rounded-t' : 'rounded-b'} border border-gray-700/30 border-dashed min-w-[180px] h-7`}>
+        <span className="text-[10px] text-gray-600">TBD</span>
+      </div>
+    );
+  }
   const owner = getOwner(team);
   const colors = owner ? PLAYER_COLORS[owner] : null;
+  const entry = TEAMS.find(t => t.team === team);
 
   return (
-    <div className={`flex items-center gap-1.5 px-2 py-1.5 text-xs ${isLoser ? 'opacity-40 line-through' : ''} ${isWinner ? 'font-bold' : ''}`}>
-      <span className="text-gray-500 w-4 text-right shrink-0">({seed})</span>
-      <span className={`truncate ${colors?.text || 'text-gray-300'}`}>{team}</span>
-      {isWinner && <span className="text-green-400">✓</span>}
-      {getOwnerBadge(team)}
+    <div className={`flex items-center gap-1 px-2 py-1 ${isTop ? 'rounded-t border-b-0' : 'rounded-b'} border border-gray-600 min-w-[180px] h-7 ${colors ? colors.bg : 'bg-gray-800/80'}`}>
+      <span className="text-[10px] text-gray-500 w-4 text-right shrink-0">{seed}</span>
+      <span className={`text-[11px] font-medium truncate ${colors?.text || 'text-gray-300'}`}>{team}</span>
+      {owner && (
+        <span className={`ml-auto text-[9px] px-1 rounded ${colors?.badge || 'bg-gray-600'} text-white shrink-0`}>
+          {owner} ${entry?.bid || 0}
+        </span>
+      )}
     </div>
   );
 }
 
-function MatchupCard({ topSeed, topTeam, bottomSeed, bottomTeam, result }: {
-  topSeed: number;
-  topTeam: string;
-  bottomSeed: number;
-  bottomTeam: string;
-  result?: GameResult;
-}) {
-  const topWin = result?.winner === topTeam;
-  const bottomWin = result?.winner === bottomTeam;
-  const topLose = result?.status === 'post' && !topWin;
-  const bottomLose = result?.status === 'post' && !bottomWin;
+function MatchupPair({ top, bottom }: { top: { seed: number | null; team: string | null }; bottom: { seed: number | null; team: string | null } }) {
+  return (
+    <div className="flex flex-col">
+      <TeamSlot seed={top.seed} team={top.team} isTop />
+      <TeamSlot seed={bottom.seed} team={bottom.team} />
+    </div>
+  );
+}
+
+function BracketRegion({ region }: { region: string }) {
+  const matchups = BRACKET[region] || [];
+
+  // R64: 8 matchups
+  const r64 = matchups.map(m => ({
+    top: { seed: m.topSeed, team: m.topTeam },
+    bottom: { seed: m.bottomSeed, team: m.bottomTeam },
+  }));
+
+  // R32: 4 matchups (winners of adjacent R64 games)
+  const r32 = [0, 1, 2, 3].map(() => ({
+    top: { seed: null as number | null, team: null as string | null },
+    bottom: { seed: null as number | null, team: null as string | null },
+  }));
+
+  // S16: 2 matchups
+  const s16 = [0, 1].map(() => ({
+    top: { seed: null as number | null, team: null as string | null },
+    bottom: { seed: null as number | null, team: null as string | null },
+  }));
+
+  // E8: 1 matchup
+  const e8 = {
+    top: { seed: null as number | null, team: null as string | null },
+    bottom: { seed: null as number | null, team: null as string | null },
+  };
 
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-hidden min-w-[220px]">
-      <div className={`border-b border-gray-800 ${topWin ? 'bg-green-900/20' : ''}`}>
-        <TeamLine seed={topSeed} team={topTeam} isWinner={topWin} isLoser={topLose} />
-      </div>
-      <div className={`${bottomWin ? 'bg-green-900/20' : ''}`}>
-        <TeamLine seed={bottomSeed} team={bottomTeam} isWinner={bottomWin} isLoser={bottomLose} />
-      </div>
-      {result && result.status !== 'pre' && (
-        <div className="text-[10px] text-center py-0.5 bg-gray-800/50 text-gray-500">
-          {result.status === 'in' ? (
-            <span className="text-red-400">🔴 {result.team1Score} - {result.team2Score} {result.statusDetail || 'LIVE'}</span>
-          ) : (
-            <span>{result.team1Score} - {result.team2Score} FINAL</span>
-          )}
+    <div className="overflow-x-auto pb-4">
+      <div className="flex items-stretch gap-0 min-w-[850px]">
+        {/* Round of 64 */}
+        <div className="flex flex-col justify-around gap-2 pr-0">
+          <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">R64</div>
+          {r64.map((m, i) => (
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} />
+          ))}
         </div>
-      )}
+
+        {/* Connectors R64 → R32 */}
+        <div className="flex flex-col justify-around w-6 shrink-0">
+          <div className="h-1 mb-1"></div>
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex flex-col items-center justify-center flex-1">
+              <div className="w-full border-t border-r border-gray-600 h-1/2 rounded-tr"></div>
+              <div className="w-full border-b border-r border-gray-600 h-1/2 rounded-br"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Round of 32 */}
+        <div className="flex flex-col justify-around gap-[52px] pr-0">
+          <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">R32</div>
+          {r32.map((m, i) => (
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} />
+          ))}
+        </div>
+
+        {/* Connectors R32 → S16 */}
+        <div className="flex flex-col justify-around w-6 shrink-0">
+          <div className="h-1 mb-1"></div>
+          {[0, 1].map(i => (
+            <div key={i} className="flex flex-col items-center justify-center flex-1">
+              <div className="w-full border-t border-r border-gray-600 h-1/2 rounded-tr"></div>
+              <div className="w-full border-b border-r border-gray-600 h-1/2 rounded-br"></div>
+            </div>
+          ))}
+        </div>
+
+        {/* Sweet 16 */}
+        <div className="flex flex-col justify-around gap-[160px] pr-0">
+          <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">S16</div>
+          {s16.map((m, i) => (
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} />
+          ))}
+        </div>
+
+        {/* Connectors S16 → E8 */}
+        <div className="flex flex-col justify-around w-6 shrink-0">
+          <div className="h-1 mb-1"></div>
+          <div className="flex flex-col items-center justify-center flex-1">
+            <div className="w-full border-t border-r border-gray-600 h-1/2 rounded-tr"></div>
+            <div className="w-full border-b border-r border-gray-600 h-1/2 rounded-br"></div>
+          </div>
+        </div>
+
+        {/* Elite 8 */}
+        <div className="flex flex-col justify-center pr-0">
+          <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">E8</div>
+          <MatchupPair top={e8.top} bottom={e8.bottom} />
+        </div>
+
+        {/* Arrow to Final Four */}
+        <div className="flex flex-col justify-center w-8 shrink-0">
+          <div className="w-full border-t border-gray-500 border-dashed relative">
+            <span className="absolute -right-1 -top-1.5 text-gray-500 text-xs">→</span>
+          </div>
+        </div>
+
+        {/* Region Winner */}
+        <div className="flex flex-col justify-center">
+          <div className="text-[10px] text-yellow-400 text-center mb-1 font-semibold">🏆</div>
+          <div className="px-3 py-2 bg-yellow-900/20 border border-yellow-600/30 border-dashed rounded-lg min-w-[80px] text-center">
+            <div className="text-[10px] text-yellow-400">{region}</div>
+            <div className="text-[10px] text-gray-500">Champion</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -79,8 +155,8 @@ export default function BracketPage() {
   return (
     <div className="space-y-4">
       <div className="text-center">
-        <h1 className="text-2xl font-bold">🏀 Tournament Bracket</h1>
-        <p className="text-gray-400 mt-1">2026 NCAA Men&apos;s Tournament</p>
+        <h1 className="text-2xl font-bold">📊 Tournament Bracket</h1>
+        <p className="text-gray-400 mt-1">2026 NCAA Men&apos;s Tournament &bull; Scroll → to see full bracket</p>
       </div>
 
       {/* Region Tabs */}
@@ -89,7 +165,7 @@ export default function BracketPage() {
           <button
             key={region}
             onClick={() => setActiveRegion(region)}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 px-2 rounded-lg text-sm font-medium transition-colors ${
               activeRegion === region
                 ? 'bg-orange-600 text-white'
                 : 'text-gray-400 hover:text-white hover:bg-gray-800'
@@ -100,106 +176,38 @@ export default function BracketPage() {
         ))}
       </div>
 
-      {/* Final Four Tab */}
-      <div className="flex gap-1">
-        <button
-          onClick={() => setActiveRegion('Final Four')}
-          className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-            activeRegion === 'Final Four'
-              ? 'bg-yellow-600 text-white'
-              : 'bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800'
-          }`}
-        >
-          🏆 Final Four
-        </button>
+      {/* Bracket Tree */}
+      <div className="bg-gray-950 rounded-xl border border-gray-800 p-4">
+        <h2 className="text-lg font-bold mb-3 text-center">{activeRegion} Region</h2>
+        <BracketRegion region={activeRegion} />
       </div>
 
-      {/* Bracket Display */}
-      {activeRegion !== 'Final Four' ? (
-        <div className="space-y-6">
-          {/* Round of 64 */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Round of 64 — {activeRegion} Region</h3>
-            <div className="space-y-2">
-              {(BRACKET[activeRegion] || []).map((matchup, i) => (
-                <MatchupCard
-                  key={i}
-                  topSeed={matchup.topSeed}
-                  topTeam={matchup.topTeam}
-                  bottomSeed={matchup.bottomSeed}
-                  bottomTeam={matchup.bottomTeam}
-                />
-              ))}
+      {/* Final Four */}
+      <div className="bg-gray-950 rounded-xl border border-yellow-800/50 p-4">
+        <h2 className="text-lg font-bold mb-3 text-center">🏆 Final Four</h2>
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex gap-4 flex-wrap justify-center">
+            <div className="bg-gray-900 border border-gray-700 border-dashed rounded-lg p-3 text-center min-w-[200px]">
+              <div className="text-xs text-gray-500 mb-1">Semifinal 1</div>
+              <div className="text-sm text-gray-400">East Champion</div>
+              <div className="text-[10px] text-gray-600">vs</div>
+              <div className="text-sm text-gray-400">West Champion</div>
+            </div>
+            <div className="bg-gray-900 border border-gray-700 border-dashed rounded-lg p-3 text-center min-w-[200px]">
+              <div className="text-xs text-gray-500 mb-1">Semifinal 2</div>
+              <div className="text-sm text-gray-400">South Champion</div>
+              <div className="text-[10px] text-gray-600">vs</div>
+              <div className="text-sm text-gray-400">Midwest Champion</div>
             </div>
           </div>
-
-          {/* Round of 32 placeholders */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Round of 32</h3>
-            <div className="space-y-2">
-              {[0, 1, 2, 3].map(i => {
-                const matchups = BRACKET[activeRegion] || [];
-                const m1 = matchups[i * 2];
-                const m2 = matchups[i * 2 + 1];
-                return (
-                  <div key={i} className="bg-gray-900 border border-gray-700/50 border-dashed rounded-lg overflow-hidden min-w-[220px]">
-                    <div className="px-2 py-1.5 text-xs text-gray-500 border-b border-gray-800">
-                      Winner: ({m1?.topSeed}){m1?.topTeam} / ({m1?.bottomSeed}){m1?.bottomTeam}
-                    </div>
-                    <div className="px-2 py-1.5 text-xs text-gray-500">
-                      Winner: ({m2?.topSeed}){m2?.topTeam} / ({m2?.bottomSeed}){m2?.bottomTeam}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Sweet 16 placeholders */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Sweet 16</h3>
-            <div className="space-y-2">
-              {[0, 1].map(i => (
-                <div key={i} className="bg-gray-900 border border-gray-700/50 border-dashed rounded-lg p-3 text-xs text-gray-500 text-center">
-                  TBD vs TBD
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Elite 8 */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">Elite 8 — {activeRegion} Champion</h3>
-            <div className="bg-gray-900 border border-yellow-700/50 border-dashed rounded-lg p-3 text-xs text-gray-500 text-center">
-              TBD vs TBD → {activeRegion} Champion
-            </div>
+          <div className="text-gray-600">↓</div>
+          <div className="bg-gray-900 border border-yellow-600/50 rounded-lg p-4 text-center min-w-[250px]">
+            <div className="text-xs text-yellow-400 mb-1">🏆 National Championship</div>
+            <div className="text-sm text-gray-400">TBD vs TBD</div>
+            <div className="text-[10px] text-green-400 mt-1">$250 Champion &bull; $150 Runner-up</div>
           </div>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {/* Final Four */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">🏆 Final Four</h3>
-            <div className="space-y-2">
-              <div className="bg-gray-900 border border-yellow-700/50 border-dashed rounded-lg p-3 text-xs text-gray-500 text-center">
-                East Champion vs West Champion
-              </div>
-              <div className="bg-gray-900 border border-yellow-700/50 border-dashed rounded-lg p-3 text-xs text-gray-500 text-center">
-                South Champion vs Midwest Champion
-              </div>
-            </div>
-          </div>
-
-          {/* Championship */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-400 mb-2">🏆 National Championship</h3>
-            <div className="bg-gray-900 border border-yellow-500/50 border-dashed rounded-lg p-4 text-center">
-              <div className="text-gray-500 text-sm">TBD vs TBD</div>
-              <div className="text-yellow-400 text-xs mt-1">$250 Champion &bull; $150 Runner-up</div>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
 
       {/* Legend */}
       <div className="bg-gray-900 rounded-xl border border-gray-800 p-3">
