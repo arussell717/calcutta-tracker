@@ -288,3 +288,4 @@ export async function fetchScores(): Promise<GameScore[]> {
     return [];
   }
 }
+// force redeploy Fri Mar 20 00:36:08 UTC 2026
