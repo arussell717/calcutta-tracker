@@ -125,7 +125,6 @@ const NAME_MAP: Record<string, string> = {
   'Utah St': 'Utah State',
   
   // 10-seeds
-  'Arkansas': 'Arkansas',
   'Miami (OH)': 'Miami OH',
   'Miami OH': 'Miami OH',
   'Miami Ohio': 'Miami OH',
