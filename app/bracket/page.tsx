@@ -40,15 +40,21 @@ function TeamSlot({ seed, team, eliminated, isTop }: { seed: number | null; team
   );
 }
 
-function MatchupPair({ top, bottom, isElim }: {
+function MatchupPair({ top, bottom, getMatchupWinner }: {
   top: SlotData;
   bottom: SlotData;
-  isElim: (name: string) => boolean;
+  getMatchupWinner: (a: string | null, b: string | null) => string | null;
 }) {
+  // Determine if there's a winner of THIS specific matchup
+  const winner = getMatchupWinner(top.team, bottom.team);
+  // Only cross out the loser of THIS matchup, not globally eliminated teams
+  const topLost = winner !== null && top.team !== null && winner !== top.team;
+  const bottomLost = winner !== null && bottom.team !== null && winner !== bottom.team;
+
   return (
     <div className="flex flex-col">
-      <TeamSlot seed={top.seed} team={top.team} eliminated={top.team ? isElim(top.team) : false} isTop />
-      <TeamSlot seed={bottom.seed} team={bottom.team} eliminated={bottom.team ? isElim(bottom.team) : false} />
+      <TeamSlot seed={top.seed} team={top.team} eliminated={topLost} isTop />
+      <TeamSlot seed={bottom.seed} team={bottom.team} eliminated={bottomLost} />
     </div>
   );
 }
@@ -59,7 +65,7 @@ function findSlotData(teamName: string | null): SlotData {
   return { seed: entry?.seed || null, team: teamName };
 }
 
-function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; isElim: (name: string) => boolean; getMatchupWinner: (a: string | null, b: string | null) => string | null }) {
+function BracketRegion({ region, getMatchupWinner }: { region: string; getMatchupWinner: (a: string | null, b: string | null) => string | null }) {
   const matchups = BRACKET[region] || [];
 
   // R64: 8 matchups from data
@@ -100,7 +106,7 @@ function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; i
         <div className="flex flex-col justify-around gap-1.5 shrink-0">
           <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">Round of 64</div>
           {r64.map((m, i) => (
-            <MatchupPair key={i} top={m.top} bottom={m.bottom} isElim={isElim} />
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} getMatchupWinner={getMatchupWinner} />
           ))}
         </div>
 
@@ -119,7 +125,7 @@ function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; i
         <div className="flex flex-col justify-around gap-[36px] shrink-0">
           <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">Round of 32</div>
           {r32.map((m, i) => (
-            <MatchupPair key={i} top={m.top} bottom={m.bottom} isElim={isElim} />
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} getMatchupWinner={getMatchupWinner} />
           ))}
         </div>
 
@@ -138,7 +144,7 @@ function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; i
         <div className="flex flex-col justify-around gap-[120px] shrink-0">
           <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">Sweet 16</div>
           {s16.map((m, i) => (
-            <MatchupPair key={i} top={m.top} bottom={m.bottom} isElim={isElim} />
+            <MatchupPair key={i} top={m.top} bottom={m.bottom} getMatchupWinner={getMatchupWinner} />
           ))}
         </div>
 
@@ -154,7 +160,7 @@ function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; i
         {/* Elite 8 */}
         <div className="flex flex-col justify-center shrink-0">
           <div className="text-[10px] text-gray-500 text-center mb-1 font-semibold">Elite 8</div>
-          <MatchupPair top={e8.top} bottom={e8.bottom} isElim={isElim} />
+          <MatchupPair top={e8.top} bottom={e8.bottom} getMatchupWinner={getMatchupWinner} />
         </div>
 
         {/* Arrow */}
@@ -184,7 +190,7 @@ function BracketRegion({ region, isElim, getMatchupWinner }: { region: string; i
 export default function BracketPage() {
   const [activeRegion, setActiveRegion] = useState('East');
   const regions = ['East', 'West', 'South', 'Midwest'];
-  const { isEliminated, getMatchupWinner, loading } = useTournamentData();
+  const { getMatchupWinner, loading } = useTournamentData();
 
   return (
     <div className="space-y-4">
@@ -214,7 +220,7 @@ export default function BracketPage() {
       {/* Bracket Tree */}
       <div className="bg-gray-950 rounded-xl border border-gray-800 p-4">
         <h2 className="text-lg font-bold mb-3 text-center">{activeRegion} Region</h2>
-        <BracketRegion region={activeRegion} isElim={isEliminated} getMatchupWinner={getMatchupWinner} />
+        <BracketRegion region={activeRegion} getMatchupWinner={getMatchupWinner} />
       </div>
 
       {/* Final Four */}
