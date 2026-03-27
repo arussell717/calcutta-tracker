@@ -74,14 +74,111 @@ export default function LeaderboardPage() {
     }
   }
 
-  // Troll messages for the first person fully eliminated
-  const CLOWN_MESSAGES = [
-    "First one out... hate to see it 🤡",
-    "Thanks for the donation 🤡",
-    "Better luck next year, champ 🤡",
-    "At least you still have your personality 🤡",
-    "Your bracket called... it wants a refund 🤡",
-  ];
+  // Generate a personalized troll/commentary message for each player
+  function getTrollMessage(player: PlayerStats, rank: number, totalPlayers: number, isFirstOut: boolean): string {
+    const { name, totalPayout, netProfit, teamsAlive, aliveTeams, deadTeams, totalBid } = player;
+    
+    // Find their most expensive team
+    const allTeams = [...aliveTeams, ...deadTeams];
+    const mostExpensive = allTeams.reduce((max, t) => t.bid > max.bid ? t : max, allTeams[0]);
+    const cheapestAlive = aliveTeams.length > 0 
+      ? aliveTeams.reduce((min, t) => t.bid < min.bid ? t : min, aliveTeams[0])
+      : null;
+    const biggestBust = deadTeams.filter(t => t.payout === 0).reduce((max, t) => t.bid > (max?.bid || 0) ? t : max, null as TeamWithStatus | null);
+    const bestValue = allTeams.filter(t => t.payout > 0).reduce((best, t) => {
+      const roi = t.payout / Math.max(t.bid, 1);
+      const bestRoi = (best?.payout || 0) / Math.max(best?.bid || 1, 1);
+      return roi > bestRoi ? t : best;
+    }, null as TeamWithStatus | null);
+    const dogWins = allTeams.filter(t => t.isDog && t.wins > 0);
+    
+    // First person fully eliminated
+    if (isFirstOut) {
+      if (mostExpensive && mostExpensive.eliminated && mostExpensive.payout === 0) {
+        return `Dropped $${mostExpensive.bid} on ${mostExpensive.team} and they couldn't even win a game. First one out. 🤡`;
+      }
+      if (netProfit <= -80) {
+        return `$${totalBid} in, $${totalPayout} out. That's not a bracket, that's a charity donation. 🤡`;
+      }
+      return `First one eliminated. Everyone else: you're welcome for the free money. 🤡`;
+    }
+
+    // Fully eliminated (not first)
+    if (teamsAlive === 0 && deadTeams.length > 0) {
+      if (totalPayout === 0) {
+        return `$${totalBid} spent, $0 earned. Not a single team made the Sweet 16. Incredible. ☠️`;
+      }
+      if (netProfit < 0) {
+        return `Made some noise with ${bestValue ? bestValue.team : 'a team'} but still down $${Math.abs(netProfit)} overall. Tough scene. ☠️`;
+      }
+      if (netProfit >= 0) {
+        return `All teams dead but still turned a profit. Respect the hustle. 💀💰`;
+      }
+    }
+
+    // Still alive — roasts and props
+    // Leading the board
+    if (rank === 0 && totalPayout > 0) {
+      if (bestValue && bestValue.bid <= 10) {
+        return `${bestValue.team} for $${bestValue.bid} is highway robbery. Currently printing money. 🏧`;
+      }
+      return `Sitting pretty at the top. Don't get comfortable. 👑`;
+    }
+
+    // Big spender with nothing to show
+    if (totalBid >= 80 && totalPayout === 0 && teamsAlive > 0) {
+      return `Spent $${totalBid} and hasn't earned a penny yet. Those teams better start winning. 😬`;
+    }
+
+    // Big spender whose expensive team busted
+    if (biggestBust && biggestBust.bid >= 40) {
+      if (teamsAlive > 0) {
+        return `$${biggestBust.bid} on ${biggestBust.team}? Gone in the ${biggestBust.wins === 0 ? 'first round' : 'Round of 32'}. Carrying on with the scraps. 💸`;
+      }
+    }
+
+    // Has a dog team still alive
+    if (dogWins.length > 0) {
+      const bestDog = dogWins.reduce((b, t) => t.wins > b.wins ? t : b, dogWins[0]);
+      return `Shoutout to the ${bestDog.team} dogs still fighting. The $${bestDog.bid} special is doing work. 🐕🔥`;
+    }
+
+    // Amazing value pick
+    if (bestValue && bestValue.bid <= 5 && bestValue.payout >= 25) {
+      return `${bestValue.team} for $${bestValue.bid} returning $${bestValue.payout}?? That's a ${Math.round(bestValue.payout / Math.max(bestValue.bid, 1))}x return. Filthy. 📈`;
+    }
+
+    // Has a single expensive team carrying everything
+    if (teamsAlive === 1 && aliveTeams[0].bid >= 30) {
+      return `Down to one horse: ${aliveTeams[0].team} ($${aliveTeams[0].bid}). Ride or die. 🐎`;
+    }
+
+    // Has lots of alive teams
+    if (teamsAlive >= 4) {
+      return `${teamsAlive} teams still alive. Quantity over quality? We'll see. 🤷`;
+    }
+
+    // Profitable
+    if (netProfit > 50) {
+      return `Up $${netProfit} and still has teams playing. Having a tournament. 🔥`;
+    }
+
+    if (netProfit > 0) {
+      return `In the green. Not flashy, but getting the job done. 📊`;
+    }
+
+    // Losing money but alive
+    if (netProfit < -50 && teamsAlive > 0) {
+      return `Down $${Math.abs(netProfit)} but still breathing. Need a miracle run. 🙏`;
+    }
+
+    // Default  
+    if (teamsAlive > 0) {
+      return `Still in it. ${teamsAlive} team${teamsAlive === 1 ? '' : 's'} left standing. 🏀`;
+    }
+
+    return `It is what it is. 🤷`;
+  }
 
   // Determine who's fully eliminated (0 alive teams) and who's still going
   const allEliminated = stats.filter(p => p.teamsAlive === 0 && p.teamsEliminated > 0);
@@ -97,11 +194,6 @@ export default function LeaderboardPage() {
         return totalWins < earliestWins ? p : earliest;
       })
     : null;
-
-  // Pick a consistent troll message based on the clown's name
-  const clownMsg = firstClown
-    ? CLOWN_MESSAGES[firstClown.name.length % CLOWN_MESSAGES.length]
-    : '';
 
   return (
     <div className="space-y-6">
@@ -132,6 +224,7 @@ export default function LeaderboardPage() {
             {stillAlive.map((player, idx) => {
               const colors = PLAYER_COLORS[player.name];
               const globalIdx = stats.indexOf(player);
+              const trollMsg = getTrollMessage(player, globalIdx, stats.length, false);
               return (
                 <div
                   key={player.name}
@@ -144,9 +237,7 @@ export default function LeaderboardPage() {
                         <span className={`font-bold text-lg ${colors?.text || 'text-white'}`}>
                           {player.name}
                         </span>
-                        <div className="text-xs text-gray-500">
-                          {player.teamCount} teams &bull; ${player.totalBid} spent
-                        </div>
+                        <div className="text-xs text-gray-400 italic mt-0.5">{trollMsg}</div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -224,6 +315,7 @@ export default function LeaderboardPage() {
               const colors = PLAYER_COLORS[player.name];
               const globalIdx = stats.indexOf(player);
               const isClown = firstClown?.name === player.name;
+              const trollMsg = getTrollMessage(player, globalIdx, stats.length, isClown);
               return (
                 <div
                   key={player.name}
@@ -237,12 +329,10 @@ export default function LeaderboardPage() {
                           {player.name} {isClown ? '🤡' : '☠️'}
                         </span>
                         {isClown && (
-                          <div className="text-xs text-yellow-500 italic">{clownMsg}</div>
+                          <div className="text-xs text-yellow-500 italic">{trollMsg}</div>
                         )}
                         {!isClown && (
-                          <div className="text-xs text-gray-600">
-                            {player.teamCount} teams &bull; All eliminated
-                          </div>
+                          <div className="text-xs text-gray-500 italic">{trollMsg}</div>
                         )}
                       </div>
                     </div>
