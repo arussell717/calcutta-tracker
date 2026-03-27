@@ -1,6 +1,6 @@
 'use client';
 
-import { TEAMS, PLAYERS, PLAYER_COLORS, PAYOUTS, BUY_IN } from '@/lib/data';
+import { TEAMS, PLAYERS, PLAYER_COLORS, PAYOUTS, BUY_IN, BRACKET } from '@/lib/data';
 import { useTournamentData } from '@/lib/useTournament';
 
 interface TeamWithStatus {
@@ -27,7 +27,7 @@ interface PlayerStats {
 }
 
 export default function LeaderboardPage() {
-  const { isEliminated, getTeamWins, getTeamPayout, loading } = useTournamentData();
+  const { isEliminated, getTeamWins, getTeamPayout, getTeamRound, loading } = useTournamentData();
 
   const stats: PlayerStats[] = PLAYERS.map(player => {
     const playerTeams = TEAMS.filter(t => t.owner === player);
@@ -41,7 +41,7 @@ export default function LeaderboardPage() {
       isDog: t.isDog,
       eliminated: isEliminated(t.team),
       wins: getTeamWins(t.team),
-      payout: getTeamPayout(t.team),
+      payout: getTeamPayout(t.team, BRACKET),
     }));
 
     const aliveTeams = teamsWithStatus.filter(t => !t.eliminated).sort((a, b) => b.wins - a.wins || b.payout - a.payout);
@@ -61,14 +61,17 @@ export default function LeaderboardPage() {
     };
   }).sort((a, b) => b.totalPayout - a.totalPayout || b.teamsAlive - a.teamsAlive);
 
-  function roundLabel(wins: number, eliminated: boolean): string {
-    if (wins >= 6) return '🏆 Champ';
-    if (wins >= 5 && eliminated) return '🥈 Runner-up';
-    if (wins >= 4) return 'Final Four';
-    if (wins >= 3) return 'Elite 8';
-    if (wins >= 2) return 'Sweet 16';
-    if (wins >= 1) return 'Round of 32';
-    return 'Round of 64';
+  function roundLabel(teamName: string, elim: boolean): string {
+    const round = getTeamRound(teamName, BRACKET);
+    switch (round) {
+      case 'CHAMPION': return '🏆 Champ';
+      case 'CHAMP_GAME': return '🥈 Runner-up';
+      case 'FF': return 'Final Four';
+      case 'E8': return 'Elite 8';
+      case 'S16': return 'Sweet 16';
+      case 'R32': return 'Round of 32';
+      default: return 'Round of 64';
+    }
   }
 
   return (
@@ -165,7 +168,7 @@ export default function LeaderboardPage() {
                     >
                       {t.payout > 0 ? '💰' : '💀'} ({t.seed}) {t.team} {t.isDog ? '🐕' : ''}
                       {t.payout > 0 
-                        ? <span className="text-green-400 ml-1">${t.payout} ({roundLabel(t.wins, true)})</span>
+                        ? <span className="text-green-400 ml-1">${t.payout} ({roundLabel(t.team, true)})</span>
                         : <span className="text-gray-700 ml-1">${t.bid}</span>
                       }
                     </span>

@@ -122,18 +122,76 @@ export function useTournamentData() {
     return wins;
   }
 
-  // Get payout for a team based on wins (non-cumulative, highest milestone only)
-  // 0-1 wins: $0, 2 wins: $25 (S16), 3 wins: $50 (E8), 4 wins: $100 (FF)
-  // 5 wins + eliminated: $150 (runner-up), 6 wins: $250 (champion)
-  function getTeamPayout(teamName: string): number {
-    const wins = getTeamWins(teamName);
-    if (wins >= 6) return 250; // Champion
-    if (wins >= 5 && eliminated.has(teamName)) return 150; // Runner-up
-    if (wins >= 4) return 100; // Final Four
-    if (wins >= 3) return 50;  // Elite 8
-    if (wins >= 2) return 25;  // Sweet 16
-    return 0;
+  // Determine the furthest round each team has reached using the BRACKET structure.
+  // This is immune to First Four / play-in extra wins because it traces through the bracket tree.
+  // Returns: 'R64' | 'R32' | 'S16' | 'E8' | 'FF' | 'CHAMP_GAME' | 'CHAMPION'
+  function getTeamRound(teamName: string, bracket: Record<string, Array<{ topTeam: string; bottomTeam: string }>>): string {
+    for (const region of ['East', 'West', 'South', 'Midwest']) {
+      const matchups = bracket[region] || [];
+      const r64 = matchups.map(m => ({
+        top: m.topTeam,
+        bottom: m.bottomTeam,
+      }));
+
+      // Check if team is in this region's R64
+      const inRegion = r64.some(m => m.top === teamName || m.bottom === teamName);
+      if (!inRegion) continue;
+
+      // Trace through bracket rounds
+      // R32 matchups (winners of adjacent R64 pairs)
+      const r32: Array<{ top: string | null; bottom: string | null }> = [];
+      for (let i = 0; i < 8; i += 2) {
+        const w1 = getMatchupWinner(r64[i].top, r64[i].bottom);
+        const w2 = getMatchupWinner(r64[i + 1].top, r64[i + 1].bottom);
+        r32.push({ top: w1, bottom: w2 });
+      }
+
+      // S16 matchups
+      const s16: Array<{ top: string | null; bottom: string | null }> = [];
+      for (let i = 0; i < 4; i += 2) {
+        const w1 = getMatchupWinner(r32[i].top, r32[i].bottom);
+        const w2 = getMatchupWinner(r32[i + 1].top, r32[i + 1].bottom);
+        s16.push({ top: w1, bottom: w2 });
+      }
+
+      // E8
+      const e8top = getMatchupWinner(s16[0]?.top ?? null, s16[0]?.bottom ?? null);
+      const e8bot = getMatchupWinner(s16[1]?.top ?? null, s16[1]?.bottom ?? null);
+
+      // Region champion
+      const regionChamp = getMatchupWinner(e8top, e8bot);
+
+      // Now determine furthest round for our team
+      if (regionChamp === teamName) return 'FF'; // At least Final Four (region champ)
+
+      if (e8top === teamName || e8bot === teamName) return 'E8';
+
+      const inS16 = s16.some(m => m.top === teamName || m.bottom === teamName);
+      if (inS16) return 'S16';
+
+      const inR32 = r32.some(m => m.top === teamName || m.bottom === teamName);
+      if (inR32) return 'R32';
+
+      return 'R64'; // Still in R64 or lost in R64
+    }
+
+    return 'R64'; // Default (team not found in bracket — e.g., dog teams)
   }
 
-  return { eliminated, winners, isEliminated, isWinner, getMatchupWinner, matchResults, getTeamWins, getTeamPayout, loading };
+  // Get payout for a team based on bracket round reached (not raw wins)
+  // This correctly handles First Four teams
+  function getTeamPayout(teamName: string, bracket: Record<string, Array<{ topTeam: string; bottomTeam: string }>>): number {
+    const round = getTeamRound(teamName, bracket);
+    // Payouts are non-cumulative: you get the payout for the round you're eliminated in
+    switch (round) {
+      case 'CHAMPION': return 250;
+      case 'CHAMP_GAME': return 150; // Runner-up
+      case 'FF': return 100;
+      case 'E8': return 50;
+      case 'S16': return 25;
+      default: return 0;
+    }
+  }
+
+  return { eliminated, winners, isEliminated, isWinner, getMatchupWinner, matchResults, getTeamWins, getTeamPayout, getTeamRound, loading };
 }
