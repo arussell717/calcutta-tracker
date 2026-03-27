@@ -113,5 +113,27 @@ export function useTournamentData() {
     return null;
   }
 
-  return { eliminated, winners, isEliminated, isWinner, getMatchupWinner, matchResults, loading };
+  // Count wins per team (how many times a team appears as winner in game results)
+  function getTeamWins(teamName: string): number {
+    let wins = 0;
+    matchResults.forEach((winner) => {
+      if (winner === teamName) wins++;
+    });
+    return wins;
+  }
+
+  // Get payout for a team based on wins (non-cumulative, highest milestone only)
+  // 0-1 wins: $0, 2 wins: $25 (S16), 3 wins: $50 (E8), 4 wins: $100 (FF)
+  // 5 wins + eliminated: $150 (runner-up), 6 wins: $250 (champion)
+  function getTeamPayout(teamName: string): number {
+    const wins = getTeamWins(teamName);
+    if (wins >= 6) return 250; // Champion
+    if (wins >= 5 && eliminated.has(teamName)) return 150; // Runner-up
+    if (wins >= 4) return 100; // Final Four
+    if (wins >= 3) return 50;  // Elite 8
+    if (wins >= 2) return 25;  // Sweet 16
+    return 0;
+  }
+
+  return { eliminated, winners, isEliminated, isWinner, getMatchupWinner, matchResults, getTeamWins, getTeamPayout, loading };
 }

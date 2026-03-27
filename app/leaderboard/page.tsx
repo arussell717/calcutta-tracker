@@ -10,6 +10,8 @@ interface TeamWithStatus {
   bid: number;
   isDog?: boolean;
   eliminated: boolean;
+  wins: number;
+  payout: number;
 }
 
 interface PlayerStats {
@@ -19,12 +21,13 @@ interface PlayerStats {
   teamsAlive: number;
   teamsEliminated: number;
   totalPayout: number;
+  netProfit: number;
   aliveTeams: TeamWithStatus[];
   deadTeams: TeamWithStatus[];
 }
 
 export default function LeaderboardPage() {
-  const { isEliminated, loading } = useTournamentData();
+  const { isEliminated, getTeamWins, getTeamPayout, loading } = useTournamentData();
 
   const stats: PlayerStats[] = PLAYERS.map(player => {
     const playerTeams = TEAMS.filter(t => t.owner === player);
@@ -37,10 +40,13 @@ export default function LeaderboardPage() {
       bid: t.bid,
       isDog: t.isDog,
       eliminated: isEliminated(t.team),
+      wins: getTeamWins(t.team),
+      payout: getTeamPayout(t.team),
     }));
 
-    const aliveTeams = teamsWithStatus.filter(t => !t.eliminated);
-    const deadTeams = teamsWithStatus.filter(t => t.eliminated);
+    const aliveTeams = teamsWithStatus.filter(t => !t.eliminated).sort((a, b) => b.wins - a.wins || b.payout - a.payout);
+    const deadTeams = teamsWithStatus.filter(t => t.eliminated).sort((a, b) => b.payout - a.payout || b.wins - a.wins);
+    const totalPayout = teamsWithStatus.reduce((sum, t) => sum + t.payout, 0);
 
     return {
       name: player,
@@ -48,11 +54,22 @@ export default function LeaderboardPage() {
       totalBid,
       teamsAlive: aliveTeams.length,
       teamsEliminated: deadTeams.length,
-      totalPayout: 0,
+      totalPayout,
+      netProfit: totalPayout - BUY_IN,
       aliveTeams,
       deadTeams,
     };
-  }).sort((a, b) => b.teamsAlive - a.teamsAlive || b.teamCount - a.teamCount);
+  }).sort((a, b) => b.totalPayout - a.totalPayout || b.teamsAlive - a.teamsAlive);
+
+  function roundLabel(wins: number, eliminated: boolean): string {
+    if (wins >= 6) return '🏆 Champ';
+    if (wins >= 5 && eliminated) return '🥈 Runner-up';
+    if (wins >= 4) return 'Final Four';
+    if (wins >= 3) return 'Elite 8';
+    if (wins >= 2) return 'Sweet 16';
+    if (wins >= 1) return 'Round of 32';
+    return 'Round of 64';
+  }
 
   return (
     <div className="space-y-6">
@@ -97,7 +114,13 @@ export default function LeaderboardPage() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-sm">
+                  <div className={`text-xl font-bold ${player.totalPayout > 0 ? 'text-green-400' : 'text-gray-600'}`}>
+                    ${player.totalPayout}
+                  </div>
+                  <div className={`text-xs ${player.netProfit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    {player.netProfit >= 0 ? '+' : ''}{player.netProfit} net
+                  </div>
+                  <div className="text-xs mt-0.5">
                     <span className="text-green-400 font-bold">{player.teamsAlive}</span>
                     <span className="text-gray-500"> alive</span>
                     {player.teamsEliminated > 0 && (
@@ -119,7 +142,9 @@ export default function LeaderboardPage() {
                       key={t.team}
                       className={`text-xs px-2 py-1 rounded-full border ${colors?.border || 'border-gray-700'} ${colors?.bg || 'bg-gray-800'} ${colors?.text || 'text-gray-300'}`}
                     >
-                      ({t.seed}) {t.team} {t.isDog ? '🐕' : ''} <span className="text-gray-500">${t.bid}</span>
+                      ({t.seed}) {t.team} {t.isDog ? '🐕' : ''}
+                      {t.payout > 0 && <span className="text-green-400 ml-1">💰${t.payout}</span>}
+                      {t.wins > 0 && <span className="text-gray-500 ml-1">{t.wins}W</span>}
                     </span>
                   ))}
                 </div>
@@ -132,9 +157,17 @@ export default function LeaderboardPage() {
                   {player.deadTeams.map(t => (
                     <span
                       key={t.team}
-                      className="text-xs px-2 py-1 rounded-full border border-red-900/30 bg-red-900/10 text-gray-600 line-through"
+                      className={`text-xs px-2 py-1 rounded-full border ${
+                        t.payout > 0 
+                          ? 'border-green-900/40 bg-green-900/10 text-green-600' 
+                          : 'border-red-900/30 bg-red-900/10 text-gray-600 line-through'
+                      }`}
                     >
-                      💀 ({t.seed}) {t.team} {t.isDog ? '🐕' : ''} <span className="text-gray-700">${t.bid}</span>
+                      {t.payout > 0 ? '💰' : '💀'} ({t.seed}) {t.team} {t.isDog ? '🐕' : ''}
+                      {t.payout > 0 
+                        ? <span className="text-green-400 ml-1">${t.payout} ({roundLabel(t.wins, true)})</span>
+                        : <span className="text-gray-700 ml-1">${t.bid}</span>
+                      }
                     </span>
                   ))}
                 </div>
